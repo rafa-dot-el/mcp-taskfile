@@ -68,7 +68,7 @@ Needs Nix and direnv. =direnv allow= enters a devenv shell with every tool pinne
 | =task lint=                                  | golangci-lint (gosec), gofmt, statix, deadnix, actionlint, shellcheck |
 | =task sec=                                   | govulncheck, gitleaks, osv-scanner                           |
 | =task check=                                 | =nix flake check= (pure; builds and tests in the sandbox)    |
-| =task check:pins=, =check:consumer=, =check:binary= | architecture gates: one nixpkgs, source-only consumer build, stripped static binary |
+| =task check:pins=, =check:consumer= | architecture gates: one nixpkgs, source-only consumer build |
 | =task ci=                                    | everything above                                             |
 | =task build=, =task build:nix=               | local binary; Nix build (prints the store path)              |
 | =task update=                                | flake and devenv locks (same nixpkgs), Go patch updates     |

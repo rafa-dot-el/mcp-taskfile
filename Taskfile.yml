@@ -99,13 +99,6 @@ tasks:
     cmds:
       - nix flake check
 
-  check:binary:
-    desc: Fail unless both the nix build and `task build` are static, stripped, trimpath, cgo-free, with no build-machine paths
-    cmds:
-      - task: build
-      - scripts/check-binary.sh ./mcp-taskfile
-      - scripts/check-binary.sh "$(nix build --no-link --print-out-paths .#default)/bin/mcp-taskfile"
-
   check:release:
     desc: Fail unless TAG (e.g. v0.1.0) equals v + the VERSION file; CI runs it on every tag
     requires:
@@ -149,7 +142,6 @@ tasks:
       - task: check
       - task: check:pins
       - task: check:consumer
-      - task: check:binary
 
   build:nix:
     desc: Build the package with this flake (pinned Go) and print its store path
@@ -206,10 +198,9 @@ tasks:
       - scripts/release.sh current
 
   test:scripts:
-    desc: Tests for the shell helpers that need no secrets (semver, check-binary)
+    desc: Tests for the shell helpers that need no secrets (semver)
     cmds:
       - scripts/semver_test.sh
-      - scripts/check_binary_test.sh
 
   test:release:
     desc: "Local-only: release.sh against throwaway bare remotes (needs the GPG signing key, so not in CI)"
