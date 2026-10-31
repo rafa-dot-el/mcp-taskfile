@@ -1,0 +1,46 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      # v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0 # gitleaks scans the full history
+          persist-credentials: false
+      # v31.11.3
+      - uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b
+      # v17: pull only; pushing is the explicit `task cache:push` step below
+      - uses: cachix/cachix-action@38b082610b782e7e93e209c35fd730d399dee866
+        with:
+          name: rafa-dot-el
+          skipPush: true
+      # devenv CLI from the nixpkgs locked in flake.lock (same binary as .envrc)
+      - name: task ci
+        run: nix run --inputs-from . nixpkgs#devenv -- shell -- task ci
+      - name: task check:release
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: nix run --inputs-from . nixpkgs#devenv -- shell -- task check:release TAG="$GITHUB_REF_NAME"
+      # Every push to main and every v* tag (the only push triggers above)
+      # uploads to the PUBLIC cache; pull requests never do. A missing
+      # CACHIX_AUTH_TOKEN secret fails this step instead of skipping it.
+      - name: task cache:push
+        if: github.event_name == 'push'
+        env:
+          CACHIX_AUTH_TOKEN: ${{ secrets.CACHIX_AUTH_TOKEN }}
+        run: nix run --inputs-from . nixpkgs#devenv -- shell -- task cache:check cache:push

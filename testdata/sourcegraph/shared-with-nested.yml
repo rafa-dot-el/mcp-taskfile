@@ -1,0 +1,11 @@
+version: "3"
+
+includes:
+  nested:
+    taskfile: ./nested/vars.yml
+
+tasks:
+  public:
+    desc: "{{.PUBLIC_DESC}}"
+    cmds:
+      - echo "shared"

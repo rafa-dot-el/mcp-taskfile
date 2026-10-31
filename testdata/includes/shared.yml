@@ -1,0 +1,25 @@
+version: "3"
+
+tasks:
+  public:
+    desc: "Shared public task"
+    requires:
+      vars:
+        - ENV
+    cmds:
+      - echo "shared {{.ENV}}"
+
+  skipped:
+    desc: "Excluded from parent include"
+    cmds:
+      - echo "skip"
+
+  secret:
+    internal: true
+    desc: "Internal shared task"
+    cmds:
+      - echo "secret"
+
+  no-desc:
+    cmds:
+      - echo "no desc"

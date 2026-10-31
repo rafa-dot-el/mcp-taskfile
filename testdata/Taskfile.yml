@@ -1,0 +1,33 @@
+version: "3"
+
+tasks:
+  build:
+    desc: "Build the project"
+    cmds:
+      - echo "building"
+
+  test:
+    desc: "Run tests"
+    cmds:
+      - echo "testing {{.CLI_ARGS}}"
+
+  lint:
+    desc: "Run linter"
+    cmds:
+      - echo "linting"
+
+  _internal:
+    cmds:
+      - echo "internal task"
+
+  no-desc:
+    cmds:
+      - echo "no description"
+
+  deploy:
+    desc: "Deploy to environment"
+    requires:
+      vars:
+        - ENV
+    cmds:
+      - echo "deploying to {{.ENV}}"

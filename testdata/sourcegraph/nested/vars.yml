@@ -1,0 +1,4 @@
+version: "3"
+
+vars:
+  PUBLIC_DESC: "Shared public task"

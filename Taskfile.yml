@@ -1,0 +1,222 @@
+version: "3"
+
+silent: true
+
+env:
+  # Pure-Go build (static binary, no C compiler). Matches package.nix.
+  CGO_ENABLED: "0"
+
+vars:
+  # Single version source, shared with package.nix.
+  VERSION:
+    sh: cat VERSION
+  COVER_PROFILE: coverage.out
+  CACHIX_CACHE: rafa-dot-el
+  CACHIX_PASS_ENTRY: code/cachix/tokens-main-ci
+  # Minimum total statement coverage (%). Ratchet upward; never lower.
+  COVER_MIN: "78"
+  # Pure functions (no I/O): each must reach COVER_PURE_MIN on its own.
+  COVER_PURE_MIN: "95"
+  PURE_FUNCS: >-
+    combineOutput parseLogLevel renderLogLevel sanitizeToolName dedupeToolNames
+    tasksChanged normalizedTaskInfo taskInfoEqual normalizeTaskfilePath
+    shouldReloadForEvent isRootTaskfileName
+
+tasks:
+  default:
+    desc: List tasks
+    cmds:
+      - task --list
+
+  fmt:
+    desc: Format Go and Nix sources
+    cmds:
+      - gofmt -w .
+      - nixfmt flake.nix package.nix devenv.nix tests/consumer/flake.nix
+
+  build:
+    desc: Build the binary with the version injected (ldflags)
+    cmds:
+      # Same flags as package.nix: stripped, no build-machine paths.
+      - go build -trimpath -ldflags "-s -w -X main.version={{.VERSION}}" -o mcp-taskfile .
+      - echo "[+] built mcp-taskfile {{.VERSION}}"
+
+  test:
+    desc: Run tests
+    cmds:
+      - go test -count=1 ./...
+
+  test:cover:
+    desc: Run tests with coverage; enforce the total minimum and the per-function minimum on pure functions
+    cmds:
+      - go test -count=1 -coverprofile={{.COVER_PROFILE}} ./...
+      - |
+        total="$(go tool cover -func={{.COVER_PROFILE}} | awk '/^total:/ {sub("%","",$3); print $3}')"
+        echo "[*] total coverage: ${total}% (minimum {{.COVER_MIN}}%)"
+        awk -v t="$total" -v m="{{.COVER_MIN}}" 'BEGIN { exit !(t+0 >= m+0) }' || { echo "[-] coverage below minimum"; exit 1; }
+        go tool cover -func={{.COVER_PROFILE}} | awk -v want="{{.PURE_FUNCS}}" -v min="{{.COVER_PURE_MIN}}" '
+          BEGIN { n = split(want, w, " "); for (i = 1; i <= n; i++) need[w[i]] = 1 }
+          ($2 in need) { pct = $3; sub("%", "", pct); seen[$2] = 1
+            if (pct + 0 < min + 0) { printf "[-] %s %s%% < %s%%\n", $2, pct, min; bad = 1 } }
+          END { for (f in need) if (!(f in seen)) { printf "[-] pure function %s not found\n", f; bad = 1 }
+                if (bad) exit 1 }'
+        echo "[+] coverage gate passed (pure functions >= {{.COVER_PURE_MIN}}%)"
+
+  lint:
+    desc: Run golangci-lint (includes gosec), gofmt check, statix, deadnix, actionlint, shellcheck
+    cmds:
+      - golangci-lint run ./...
+      - test -z "$(gofmt -l .)" || { echo "[-] gofmt needed:"; gofmt -l .; exit 1; }
+      - statix check .
+      - deadnix --fail .
+      - actionlint
+      - shellcheck .envrc scripts/*.sh
+
+  sec:vuln:
+    desc: govulncheck on reachable Go vulnerabilities
+    cmds:
+      - govulncheck ./...
+
+  sec:secrets:
+    desc: gitleaks scan of the working tree and git history
+    cmds:
+      - gitleaks detect --redact --no-banner
+
+  sec:deps:
+    desc: osv-scanner over go.mod
+    cmds:
+      - osv-scanner scan source --lockfile=go.mod
+
+  sec:
+    desc: All security scans (vuln, secrets, deps)
+    cmds:
+      - task: sec:vuln
+      - task: sec:secrets
+      - task: sec:deps
+
+  check:
+    desc: Nix flake check (pure; builds the package and runs its tests in the sandbox)
+    cmds:
+      - nix flake check
+
+  check:binary:
+    desc: Fail unless both the nix build and `task build` are static, stripped, trimpath, cgo-free, with no build-machine paths
+    cmds:
+      - task: build
+      - scripts/check-binary.sh ./mcp-taskfile
+      - scripts/check-binary.sh "$(nix build --no-link --print-out-paths .#default)/bin/mcp-taskfile"
+
+  check:release:
+    desc: Fail unless TAG (e.g. v0.1.0) equals v + the VERSION file; CI runs it on every tag
+    requires:
+      vars: [TAG]
+    cmds:
+      - |
+        [ "{{.TAG}}" = "v{{.VERSION}}" ] || { echo "[-] tag {{.TAG}} does not match VERSION {{.VERSION}} (want v{{.VERSION}})"; exit 1; }
+        echo "[+] tag {{.TAG}} matches VERSION"
+
+  check:pins:
+    desc: Fail if the dev shell (devenv) and the package (flake.lock) use different nixpkgs revisions
+    cmds:
+      - scripts/check-pins.sh
+
+  check:consumer:
+    desc: Fail unless a consumer on another nixpkgs can import package.nix as source (one lock node), build it with its own go_1_26, and get VERSION
+    cmds:
+      - scripts/check-consumer.sh
+
+  update:
+    desc: Update flake inputs and Go modules (patch level only; minor/major bumps are deliberate), then re-run the gate
+    cmds:
+      - nix flake update
+      # devenv.yaml pins the exact nixpkgs revision of flake.lock (check:pins).
+      - |
+        rev="$(jq -r '.nodes.nixpkgs.locked.rev' flake.lock)"
+        sed -i "s|github:NixOS/nixpkgs/[0-9a-f]\{40\}|github:NixOS/nixpkgs/$rev|" devenv.yaml
+      - devenv update
+      - task: check:pins
+      - go get -u=patch ./...
+      - go mod tidy
+      - echo "[*] If go.mod/go.sum changed, set a fake vendorHash in package.nix, run 'task check', and paste the reported hash."
+
+  ci:
+    desc: Full gate used by CI (lint, tests with coverage, security scans, nix check)
+    cmds:
+      - task: lint
+      - task: test:cover
+      - task: test:scripts
+      - task: sec
+      - task: check
+      - task: check:pins
+      - task: check:consumer
+      - task: check:binary
+
+  build:nix:
+    desc: Build the package with this flake (pinned Go) and print its store path
+    cmds:
+      - nix build --no-link --print-out-paths .#default
+
+  cache:check:
+    desc: >-
+      Verify a push would work WITHOUT uploading anything: build, list the
+      closure that would be pushed, and confirm the token has write access to
+      the rafa-dot-el cache. Token: CACHIX_AUTH_TOKEN (CI) or pass (local).
+    cmds:
+      - |
+        out="$(nix build --no-link --print-out-paths .#default)"
+        echo "[*] would push the closure of $out:"
+        nix path-info --recursive --closure-size --human-readable "$out" | sed 's/^/    /'
+        token="$(scripts/cachix-token.sh {{.CACHIX_PASS_ENTRY}})"
+        perm="$(curl -fsS -H "Authorization: Bearer $token" https://app.cachix.org/api/v1/cache/{{.CACHIX_CACHE}} | jq -r '.permission')"
+        case "$perm" in
+          Write|Admin) echo "[+] token can push to {{.CACHIX_CACHE}} (permission: $perm)" ;;
+          *) echo "[-] token cannot push to {{.CACHIX_CACHE}} (permission: $perm)"; exit 1 ;;
+        esac
+
+  cache:push:
+    desc: >-
+      Build the package with this flake and push its closure to the rafa-dot-el
+      Cachix cache (PUBLIC). Same command locally and in CI. Token:
+      CACHIX_AUTH_TOKEN (CI) or pass (local); never written to disk.
+    cmds:
+      - |
+        out="$(nix build --no-link --print-out-paths .#default)"
+        echo "[*] pushing $out to {{.CACHIX_CACHE}}"
+        CACHIX_AUTH_TOKEN="$(scripts/cachix-token.sh {{.CACHIX_PASS_ENTRY}})" cachix push {{.CACHIX_CACHE}} "$out"
+        echo "[+] pushed $out"
+
+  release:patch:
+    desc: "Release vX.Y.(Z+1): gate, bump VERSION, signed commit + tag, push to GitLab and GitHub (CI then pushes to Cachix)"
+    cmds:
+      - scripts/release.sh patch
+
+  release:minor:
+    desc: "Release vX.(Y+1).0: same steps as release:patch"
+    cmds:
+      - scripts/release.sh minor
+
+  release:major:
+    desc: "Release v(X+1).0.0: same steps as release:patch"
+    cmds:
+      - scripts/release.sh major
+
+  release:current:
+    desc: Tag the VERSION already committed (no bump), e.g. the first release
+    cmds:
+      - scripts/release.sh current
+
+  test:scripts:
+    desc: Tests for the shell helpers that need no secrets (semver)
+    cmds:
+      - scripts/semver_test.sh
+
+  test:release:
+    desc: "Local-only: release.sh against throwaway bare remotes (needs the GPG signing key, so not in CI)"
+    cmds:
+      - scripts/release_test.sh
+
+  clean:
+    desc: Remove local build artifacts (Go binary, coverage, Nix symlinks)
+    cmds:
+      - rm -f mcp-taskfile {{.COVER_PROFILE}}
+      - rm -rf result result-*

@@ -1,0 +1,11 @@
+# nixpkgs must be the revision locked in flake.lock, so the dev shell and the
+# package build use the same Go. `task update` rewrites it; `task check:pins`
+# fails on drift.
+inputs:
+  nixpkgs:
+    url: github:NixOS/nixpkgs/1c89083e451e891152365b799595cf7790a43325
+  git-hooks:
+    url: github:cachix/git-hooks.nix
+    inputs:
+      nixpkgs:
+        follows: nixpkgs

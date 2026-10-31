@@ -1,0 +1,94 @@
+#+title: mcp-taskfile
+#+options: toc:nil num:nil
+
+An MCP server (stdio) that turns the public tasks of a [[https://taskfile.dev][Taskfile]] into MCP tools, so an agent calls =test=, =lint= or =build= instead of guessing shell commands. The tool list follows the Taskfile: edit it, and connected clients see the change.
+
+* Quick start
+
+#+begin_src bash :eval never-export
+nix run github:rafa-dot-el/mcp-taskfile -- --dir /path/to/project
+#+end_src
+
+MCP client configuration (stdio):
+
+#+begin_src json :eval never-export
+{ "mcpServers": { "taskfile": { "command": "mcp-taskfile", "args": ["--dir", "/path/to/project"] } } }
+#+end_src
+
+* How tasks become tools
+
+| Taskfile                        | MCP tool                                       |
+|---------------------------------+------------------------------------------------|
+| task with a =desc=              | one tool, described by the =desc=              |
+| task without =desc=, =internal= | not exposed                                    |
+| =requires: vars: [NAME]=        | string parameter =NAME= (Task enforces it)    |
+| (always)                        | optional parameter =cli_args= (={{.CLI_ARGS}}=) |
+| =ns:build=                      | tool =ns_build=                                |
+
+- *Reload:* the Taskfile and every included Taskfile are watched; a broken edit keeps the last good tool set.
+- *Name clashes:* =a:b= and =a_b= both map to =a_b=. The first task in task-list order wins (root tasks before namespaced ones); the other is logged as a warning.
+- *Timeout:* each call is limited by =--task-timeout= (default =5m=, =0= disables). On expiry the task is killed and the tool returns an error naming the timeout.
+
+* Options
+
+| Flag / variable                  | Meaning                                                     |
+|----------------------------------+-------------------------------------------------------------|
+| =--dir PATH=                     | directory holding the Taskfile (default: current directory) |
+| =--task-timeout DURATION=        | per-call limit, e.g. =90s=, =10m= (default =5m=)            |
+| =--version=                      | print the version and exit                                  |
+| =MCP_TASKFILE_LOG_LEVEL=         | =trace=, =debug=, =info=, =warn=, =error=, =crit=           |
+
+* Use from another Nix flake
+
+=package.nix= is a plain =callPackage= file. Import the repository as /source/ (=flake = false=) and build it with your own =pkgs=: one extra lock entry, no second nixpkgs.
+
+#+begin_src nix :eval never-export
+inputs.mcp-taskfile = {
+  url = "github:rafa-dot-el/mcp-taskfile";
+  flake = false;
+};
+
+# where pkgs is your nixpkgs (it must provide go_1_26):
+mcp-taskfile = pkgs.callPackage "${inputs.mcp-taskfile}/package.nix" { };
+#+end_src
+
+The binary is built with /your/ =go_1_26=, so it is built once per nixpkgs bump on your side; this repository's binary cache serves =nix run= of this repository only. =task check:consumer= builds the package this way against nixos-25.11 on every CI run.
+
+* Security
+
+The server runs Taskfile commands with the privileges of the user that starts it. Point =--dir= only at projects whose Taskfile you trust, and do not expose the stdio transport to untrusted clients. Report vulnerabilities privately through GitHub security advisories.
+
+* Development
+
+Needs Nix and direnv. =direnv allow= enters a devenv shell with every tool pinned; the shell's Go is the build's Go. Every action is a task, and CI runs the same =task ci= you run locally.
+
+| Task                                         | Purpose                                                      |
+|----------------------------------------------+--------------------------------------------------------------|
+| =task test=, =task test:cover=               | unit tests; coverage gate (total and 95% per pure function)  |
+| =task lint=                                  | golangci-lint (gosec), gofmt, statix, deadnix, actionlint, shellcheck |
+| =task sec=                                   | govulncheck, gitleaks, osv-scanner                           |
+| =task check=                                 | =nix flake check= (pure; builds and tests in the sandbox)    |
+| =task check:pins=, =check:consumer=, =check:binary= | architecture gates: one nixpkgs, source-only consumer build, stripped static binary |
+| =task ci=                                    | everything above                                             |
+| =task build=, =task build:nix=               | local binary; Nix build (prints the store path)              |
+| =task update=                                | flake and devenv locks (same nixpkgs), Go patch updates     |
+
+Everything is locked: =go.sum= and =vendorHash= (Go), =flake.lock= and =devenv.lock= (Nix). After a Go dependency change set =vendorHash = lib.fakeHash=, run =task check=, and paste the reported hash.
+
+* Releases
+
+Releases are signed tags =vX.Y.Z=; the =VERSION= file is the only place the version is written.
+
+#+begin_src bash :eval never-export
+task release:patch    # or release:minor, release:major; release:current tags VERSION as is
+#+end_src
+
+The task refuses to run off =main=, with a dirty tree, when =main= differs from a remote, or when the tag exists. It runs =task ci=, bumps =VERSION=, makes a signed =release: vX.Y.Z= commit and signed tag, and pushes both atomically. CI then checks that the tag equals =v= + =VERSION=, runs the full gate, and uploads the build to the binary cache.
+
+* Binary cache
+
+CI pushes every build of =main= and every release tag to the public Cachix cache =rafa-dot-el=. Locally, =task cache:check= verifies a push without uploading and =task cache:push= uploads; the token comes from =CACHIX_AUTH_TOKEN= (CI) or =pass= (local) and is never written to disk.
+
+* License
+
+GPL-3.0-or-later. See =LICENSE=.
