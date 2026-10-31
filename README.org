@@ -52,7 +52,7 @@ inputs.mcp-taskfile = {
 mcp-taskfile = pkgs.callPackage "${inputs.mcp-taskfile}/package.nix" { };
 #+end_src
 
-The binary is built with /your/ =go_1_26=, so it is built once per nixpkgs bump on your side; this repository's binary cache serves =nix run= of this repository only. =task check:consumer= builds the package this way against nixos-25.11 on every CI run.
+The package builds with the Go of the =pkgs= you pass in, so a nixpkgs that provides =go_1_26= is required and the result is not taken from this repository's binary cache.
 
 * Security
 
