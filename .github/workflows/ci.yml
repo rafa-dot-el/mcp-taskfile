@@ -43,4 +43,4 @@ jobs:
         if: github.event_name == 'push'
         env:
           CACHIX_AUTH_TOKEN: ${{ secrets.CACHIX_AUTH_TOKEN }}
-        run: nix run --inputs-from . nixpkgs#devenv -- shell -- task cache:check cache:push
+        run: nix run --inputs-from . nixpkgs#devenv -- shell -- task cache:push

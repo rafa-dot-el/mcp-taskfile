@@ -3,7 +3,7 @@
 
   # This flake serves this repo only (its CI, `nix run`, cache:push).
   # Consumers do NOT use it: they import ./package.nix as source
-  # (`flake = false`) and build it with their own pkgs (`task check:consumer`).
+  # (`flake = false`) and build it with their own pkgs.
   # The dev shell is standalone devenv; devenv.yaml pins the same nixpkgs
   # revision as flake.lock (`task check:pins`).
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";

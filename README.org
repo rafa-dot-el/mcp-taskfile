@@ -68,7 +68,7 @@ Needs Nix and direnv. =direnv allow= enters a devenv shell with every tool pinne
 | =task lint=                                  | golangci-lint (gosec), gofmt, statix, deadnix, actionlint, shellcheck |
 | =task sec=                                   | govulncheck, gitleaks, osv-scanner                           |
 | =task check=                                 | =nix flake check= (pure; builds and tests in the sandbox)    |
-| =task check:pins=, =check:consumer= | architecture gates: one nixpkgs, source-only consumer build |
+| =task check:pins=                            | dev shell and package use the same nixpkgs revision          |
 | =task ci=                                    | everything above                                             |
 | =task build=, =task build:nix=               | local binary; Nix build (prints the store path)              |
 | =task update=                                | flake and devenv locks (same nixpkgs), Go patch updates     |
@@ -87,7 +87,7 @@ The task refuses to run off =main=, with a dirty tree, when =main= differs from 
 
 * Binary cache
 
-CI pushes every build of =main= and every release tag to the public Cachix cache =rafa-dot-el=. Locally, =task cache:check= verifies a push without uploading and =task cache:push= uploads; the token comes from =CACHIX_AUTH_TOKEN= (CI) or =pass= (local) and is never written to disk.
+CI pushes every build of =main= and every release tag to the public Cachix cache =rafa-dot-el=. Locally, =task cache:push= uploads; the token comes from =CACHIX_AUTH_TOKEN= (CI) or =pass= (local) and is never written to disk.
 
 * License
 
