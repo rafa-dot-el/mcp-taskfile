@@ -206,9 +206,10 @@ tasks:
       - scripts/release.sh current
 
   test:scripts:
-    desc: Tests for the shell helpers that need no secrets (semver)
+    desc: Tests for the shell helpers that need no secrets (semver, check-binary)
     cmds:
       - scripts/semver_test.sh
+      - scripts/check_binary_test.sh
 
   test:release:
     desc: "Local-only: release.sh against throwaway bare remotes (needs the GPG signing key, so not in CI)"

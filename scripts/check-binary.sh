@@ -21,7 +21,7 @@ home_refs="$(strings "$bin" | grep -c -E '(^|[^A-Za-z0-9_./-])/(home|Users|build
 
 # nixpkgs patches Go's time, net and mime packages to read these store paths.
 allowed='-(tzdata|iana-etc|mailcap)-'
-extra="$(strings "$bin" | grep -oE '/nix/store/[a-z0-9]{32}-[^/]+' | sort -u | grep -vE "$allowed" || true)"
+extra="$(strings "$bin" | grep -oE '/nix/store/[a-z0-9]{32}-[^/]+' | sort -u | grep -vE -e "$allowed" || true)"
 [ -z "$extra" ] || bad "unexpected store references: $(tr '\n' ' ' <<<"$extra")"
 
 [ "$fail" = "0" ] || exit 1
