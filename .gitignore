@@ -7,3 +7,4 @@ result-*
 .devenv.flake.nix
 .pre-commit-config.yaml
 coverage.out
+dist/

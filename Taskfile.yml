@@ -64,7 +64,7 @@ tasks:
         echo "[+] coverage gate passed (pure functions >= {{.COVER_PURE_MIN}}%)"
 
   lint:
-    desc: Run golangci-lint (includes gosec), gofmt check, statix, deadnix, actionlint, shellcheck
+    desc: Run golangci-lint (includes gosec), gofmt check, statix, deadnix, actionlint, shellcheck, goreleaser check
     cmds:
       - golangci-lint run ./...
       - test -z "$(gofmt -l .)" || { echo "[-] gofmt needed:"; gofmt -l .; exit 1; }
@@ -72,6 +72,7 @@ tasks:
       - deadnix --fail .
       - actionlint
       - shellcheck .envrc
+      - goreleaser check
 
   sec:vuln:
     desc: govulncheck on reachable Go vulnerabilities
@@ -163,6 +164,54 @@ tasks:
         out="$(nix build --no-link --print-out-paths .#default)"
         cachix push {{.CACHIX_CACHE}} "$out"
         echo "[+] pushed $out to {{.CACHIX_CACHE}}"
+
+  release:check-config:
+    desc: Validate .goreleaser.yaml
+    cmds:
+      - goreleaser check
+
+  release:verify:
+    desc: Build the release matrix as a local snapshot (no publish) and assert archives, checksums, binary formats and version
+    cmds:
+      - env -u GITHUB_TOKEN -u GITLAB_TOKEN -u GITEA_TOKEN GORELEASER_CURRENT_TAG=v{{.VERSION}} goreleaser release --snapshot --clean --skip=publish,sign,announce,validate
+      - |
+        fail() { echo "[-] $*"; exit 1; }
+        cd dist
+        # target: archive suffix | `file` signature
+        expect() {
+          archive="$(ls mcp-taskfile_*_"$1" 2>/dev/null | head -n1)"
+          [ -n "$archive" ] || fail "missing archive for $1"
+          tmp="$(mktemp -d)"
+          case "$archive" in
+            *.zip) unzip -q "$archive" -d "$tmp" ;;
+            *) tar -xzf "$archive" -C "$tmp" ;;
+          esac
+          bin="$(find "$tmp" -type f \( -name mcp-taskfile -o -name mcp-taskfile.exe \) | head -n1)"
+          [ -n "$bin" ] || fail "no binary in $archive"
+          [ -f "$tmp/LICENSE" ] || fail "no LICENSE in $archive"
+          file "$bin" | grep -Eq "$2" || fail "$archive: unexpected format: $(file -b "$bin")"
+          rm -rf "$tmp"
+          echo "[+] $archive"
+        }
+        expect linux_amd64.tar.gz   'ELF 64-bit.*x86-64'
+        expect linux_arm64.tar.gz   'ELF 64-bit.*ARM aarch64'
+        expect darwin_amd64.tar.gz  'Mach-O 64-bit x86_64'
+        expect darwin_arm64.tar.gz  'Mach-O 64-bit arm64'
+        expect windows_amd64.zip    'PE32\+ executable.*x86-64'
+        expect windows_arm64.zip    'PE32\+ executable.*ARM64'
+        expect freebsd_amd64.tar.gz 'ELF 64-bit.*x86-64.*FreeBSD'
+        expect freebsd_arm64.tar.gz 'ELF 64-bit.*ARM aarch64.*FreeBSD'
+        expect openbsd_amd64.tar.gz 'ELF 64-bit.*x86-64.*OpenBSD'
+        expect netbsd_amd64.tar.gz  'ELF 64-bit.*x86-64.*NetBSD'
+        [ "$(ls mcp-taskfile_*.tar.gz mcp-taskfile_*.zip | wc -l)" = 10 ] || fail "expected exactly 10 archives"
+        sha256sum -c --quiet SHA256SUMS || fail "SHA256SUMS does not verify"
+        echo "[+] SHA256SUMS verifies"
+        tmp="$(mktemp -d)"
+        tar -xzf mcp-taskfile_*_linux_amd64.tar.gz -C "$tmp"
+        got="$("$(find "$tmp" -type f -name mcp-taskfile | head -n1)" --version)"
+        rm -rf "$tmp"
+        [ "$got" = "mcp-taskfile {{.VERSION}}" ] || fail "version output '$got', want 'mcp-taskfile {{.VERSION}}'"
+        echo "[+] release matrix verified (${got})"
 
   release:patch:
     desc: "Release vX.Y.(Z+1): gate, bump VERSION, signed commit and tag, push to GitLab and GitHub (CI then pushes to Cachix)"

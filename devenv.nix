@@ -18,6 +18,7 @@
     curl
     prek
     cachix
+    goreleaser
   ];
 
   # Pure-Go build: no C compiler needed, static binary.

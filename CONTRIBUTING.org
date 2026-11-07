@@ -26,7 +26,17 @@ Releases are signed tags =vX.Y.Z=; the =VERSION= file is the only place the vers
 task release:patch    # or release:minor, release:major; release:current tags VERSION as is
 #+end_src
 
-The task refuses to run off =main=, with a dirty tree, when =main= differs from a remote, or when the tag exists. It runs =task ci=, bumps =VERSION=, makes a signed =release: vX.Y.Z= commit and signed tag, and pushes both atomically to GitLab and GitHub. CI then checks that the tag equals =v= + =VERSION=, runs the full gate, and uploads the build to the binary cache.
+The task refuses to run off =main=, with a dirty tree, when =main= differs from a remote, or when the tag exists. It runs =task ci=, bumps =VERSION=, makes a signed =release: vX.Y.Z= commit and signed tag, and pushes both atomically to GitLab and GitHub. The tag push triggers the =release= workflow on GitHub: it checks that the tag equals =v= + =VERSION=, runs the full gate (=ci.yml=), uploads the build to the binary cache, then GoReleaser builds the platform archives from =.goreleaser.yaml= and publishes a GitHub Release with =SHA256SUMS= and build provenance attestations.
+
+=task release:verify= builds the same matrix as a local snapshot and asserts the archive set, checksums, executable formats and version output. Add a platform to =.goreleaser.yaml= only after =CGO_ENABLED=0 GOOS=<os> GOARCH=<arch> go build .= succeeds, and extend =release:verify= with its format.
+
+To publish or republish a release for an existing tag (the first release, v0.1.0, predates the workflow):
+
+#+begin_src bash :eval never-export
+gh workflow run release.yml -f tag=v0.1.0
+#+end_src
+
+The source is the tag; the release config is the one on the commit that holds the workflow.
 
 * Binary cache
 

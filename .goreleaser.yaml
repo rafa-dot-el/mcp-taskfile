@@ -1,0 +1,75 @@
+# yaml-language-server: $schema=https://goreleaser.com/static/schema.json
+version: 2
+
+project_name: mcp-taskfile
+
+builds:
+  - id: mcp-taskfile
+    main: .
+    binary: mcp-taskfile
+    env:
+      # Pure-Go static binary, same as package.nix.
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    ldflags:
+      # Same flags as package.nix and `task build`.
+      - -s -w -X main.version={{.Version}}
+    mod_timestamp: "{{ .CommitTimestamp }}"
+    # Explicit list: every target here was compile-checked. Add a target only
+    # after `CGO_ENABLED=0 GOOS=<os> GOARCH=<arch> go build .` succeeds.
+    targets:
+      - linux_amd64
+      - linux_arm64
+      - darwin_amd64
+      - darwin_arm64
+      - windows_amd64
+      - windows_arm64
+      - freebsd_amd64
+      - freebsd_arm64
+      - openbsd_amd64
+      - netbsd_amd64
+
+archives:
+  - id: mcp-taskfile
+    ids: [mcp-taskfile]
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    name_template: "mcp-taskfile_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    wrap_in_directory: false
+    files:
+      - LICENSE
+      - README.org
+
+checksum:
+  name_template: SHA256SUMS
+  algorithm: sha256
+
+snapshot:
+  # With GORELEASER_CURRENT_TAG=v<VERSION> the snapshot reports <VERSION>.
+  version_template: "{{ .Version }}"
+
+changelog:
+  sort: asc
+  use: git
+  groups:
+    - title: Features
+      regexp: '^feat(\(.+\))?!?:'
+      order: 0
+    - title: Fixes
+      regexp: '^fix(\(.+\))?!?:'
+      order: 1
+    - title: Other
+      order: 2
+  filters:
+    exclude:
+      - '^release:'
+
+release:
+  github:
+    owner: rafa-dot-el
+    name: mcp-taskfile
+  # Re-running the workflow for an existing tag replaces the assets.
+  mode: replace

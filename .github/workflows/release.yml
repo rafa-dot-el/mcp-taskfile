@@ -1,0 +1,98 @@
+name: release
+
+# A pushed v* tag builds the release matrix (.goreleaser.yaml) after the full
+# gate (ci.yml) passes, then publishes a GitHub Release with SHA256SUMS and
+# build provenance attestations.
+#
+# workflow_dispatch re-runs the same path for an existing tag (the first
+# release, v0.1.0, predates this workflow). The source is always the tag; the
+# release config is always the one at the commit that holds this workflow, so
+# one code path serves both triggers.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to build and publish (vX.Y.Z)
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}-${{ inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+    steps:
+      - name: Validate tag
+        id: tag
+        env:
+          TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          [[ "$TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]] || { echo "[-] '$TAG' is not vX.Y.Z"; exit 1; }
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "[+] releasing $TAG"
+
+  gate:
+    needs: prepare
+    uses: ./.github/workflows/ci.yml
+    with:
+      ref: refs/tags/${{ needs.prepare.outputs.tag }}
+      tag: ${{ needs.prepare.outputs.tag }}
+    secrets: inherit
+
+  release:
+    needs: [prepare, gate]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: write # create the GitHub Release and upload assets
+      id-token: write # keyless signing identity for the attestation
+      attestations: write # store the attestation
+    steps:
+      # v7.0.1
+      - name: Checkout tag (source)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: refs/tags/${{ needs.prepare.outputs.tag }}
+          fetch-depth: 0
+          persist-credentials: false
+      # v7.0.1
+      - name: Checkout workflow commit (release config)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          path: tooling
+          persist-credentials: false
+      # Keep the config checkout out of the source tree's git state.
+      - name: Exclude tooling from git state
+        run: echo "/tooling/" >> .git/info/exclude
+      # v31.11.3
+      - uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b
+      # v17: pull only; the gate job already pushed to the cache
+      - uses: cachix/cachix-action@38b082610b782e7e93e209c35fd730d399dee866
+        with:
+          name: rafa-dot-el
+          skipPush: true
+      # goreleaser from the nixpkgs revision locked in the tagged flake.lock
+      - name: goreleaser release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GORELEASER_CURRENT_TAG: ${{ needs.prepare.outputs.tag }}
+        run: nix run --inputs-from . nixpkgs#goreleaser -- release --clean --config tooling/.goreleaser.yaml
+      # v4.2.2
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8
+        with:
+          subject-path: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/SHA256SUMS

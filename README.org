@@ -45,6 +45,26 @@ Add the server to your MCP client (stdio), pointing =--dir= at the project:
 
 Append a tag to pin a release: =github:rafa-dot-el/mcp-taskfile/v0.1.0=.
 
+* Prebuilt binaries
+
+Each [[https://github.com/rafa-dot-el/mcp-taskfile/releases][GitHub Release]] carries one archive per platform (=.zip= on Windows, =.tar.gz= elsewhere) and =SHA256SUMS=. Verify before running:
+
+#+begin_src bash :eval never-export
+sha256sum -c --ignore-missing SHA256SUMS
+gh attestation verify mcp-taskfile_0.1.0_linux_amd64.tar.gz -R rafa-dot-el/mcp-taskfile
+#+end_src
+
+| OS      | amd64 | arm64 |
+|---------+-------+-------|
+| Linux   | yes   | yes   |
+| macOS   | yes   | yes   |
+| Windows | yes   | yes   |
+| FreeBSD | yes   | yes   |
+| OpenBSD | yes   | no    |
+| NetBSD  | yes   | no    |
+
+Every binary is a static pure-Go build (=CGO_ENABLED=0=). The test suite runs on Linux only; the other platforms are cross-compiled and checked for the executable format, not executed in CI.
+
 * How tasks become tools
 
 | Taskfile                           | MCP tool                                               |
