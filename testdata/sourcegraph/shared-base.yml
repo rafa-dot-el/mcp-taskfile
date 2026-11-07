@@ -1,0 +1,7 @@
+version: "3"
+
+tasks:
+  public:
+    desc: "Shared public task"
+    cmds:
+      - echo "shared"

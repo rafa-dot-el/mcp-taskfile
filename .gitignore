@@ -1,0 +1,9 @@
+mcp-taskfile
+/vendor/
+result
+result-*
+.direnv/
+.devenv/
+.devenv.flake.nix
+.pre-commit-config.yaml
+coverage.out

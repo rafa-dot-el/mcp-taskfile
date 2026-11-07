@@ -1,0 +1,12 @@
+version: "3"
+
+tasks:
+  build:
+    desc: "Build the project"
+    cmds:
+      - echo "building"
+
+  new-task:
+    desc: "A new task after reload"
+    cmds:
+      - echo "new"

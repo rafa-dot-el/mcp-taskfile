@@ -1,0 +1,16 @@
+version: "3"
+
+tasks:
+  public:
+    desc: "Shared public task"
+    requires:
+      vars:
+        - ENV
+        - REGION
+    cmds:
+      - echo "shared {{.ENV}} {{.REGION}}"
+
+  new-task:
+    desc: "New included task after reload"
+    cmds:
+      - echo "new"

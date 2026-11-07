@@ -1,0 +1,7 @@
+version: "3"
+
+tasks:
+  invisible:
+    desc: "Hidden include task"
+    cmds:
+      - echo "invisible"

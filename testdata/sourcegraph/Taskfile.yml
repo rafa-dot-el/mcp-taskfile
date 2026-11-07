@@ -1,0 +1,11 @@
+version: "3"
+
+includes:
+  shared:
+    taskfile: ./shared.yml
+
+tasks:
+  root:
+    desc: "Root task"
+    cmds:
+      - echo "root"
