@@ -1,0 +1,33 @@
+#+title: Contributing
+#+options: toc:nil num:nil
+
+* Setup
+
+Needs Nix and direnv. =direnv allow= enters a devenv shell with every tool pinned; the shell's Go is the build's Go. Every action is a task, and CI runs the same =task ci= you run locally.
+
+| Task                           | Purpose                                                               |
+|--------------------------------+-----------------------------------------------------------------------|
+| =task test=, =task test:cover= | unit tests; coverage gate (total and 95% per pure function)           |
+| =task lint=                    | golangci-lint (gosec), gofmt, statix, deadnix, actionlint, shellcheck |
+| =task sec=                     | govulncheck, gitleaks, osv-scanner                                    |
+| =task check=                   | =nix flake check= (pure; builds and tests in the sandbox)             |
+| =task check:pins=              | dev shell and package use the same nixpkgs revision                   |
+| =task ci=                      | everything above; the same command runs in CI                         |
+| =task build=, =task build:nix= | local binary; Nix build (prints the store path)                       |
+| =task update=                  | flake and devenv locks (same nixpkgs), Go patch updates               |
+
+Everything is locked: =go.sum= and =vendorHash= (Go), =flake.lock= and =devenv.lock= (Nix). After a Go dependency change set =vendorHash = lib.fakeHash=, run =task check=, and paste the reported hash.
+
+* Releases
+
+Releases are signed tags =vX.Y.Z=; the =VERSION= file is the only place the version is written.
+
+#+begin_src bash :eval never-export
+task release:patch    # or release:minor, release:major; release:current tags VERSION as is
+#+end_src
+
+The task refuses to run off =main=, with a dirty tree, when =main= differs from a remote, or when the tag exists. It runs =task ci=, bumps =VERSION=, makes a signed =release: vX.Y.Z= commit and signed tag, and pushes both atomically to GitLab and GitHub. CI then checks that the tag equals =v= + =VERSION=, runs the full gate, and uploads the build to the binary cache.
+
+* Binary cache
+
+CI pushes every build of =main= and every release tag to the public Cachix cache =rafa-dot-el=. =task cache:push= does the same from a workstation; the token comes from =CACHIX_AUTH_TOKEN= and is never written to disk. The cache serves =nix run= of this repository; a consumer that builds =package.nix= with its own nixpkgs builds the binary itself.
