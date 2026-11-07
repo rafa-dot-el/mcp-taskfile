@@ -30,4 +30,4 @@ The task refuses to run off =main=, with a dirty tree, when =main= differs from 
 
 * Binary cache
 
-CI pushes every build of =main= and every release tag to the public Cachix cache =rafa-dot-el=. =task cache:push= does the same from a workstation; the token comes from =CACHIX_AUTH_TOKEN= and is never written to disk. The cache serves =nix run= of this repository; a consumer that builds =package.nix= with its own nixpkgs builds the binary itself.
+CI pushes every build of =main= and every release tag to the public Cachix cache =rafa-dot-el=. =task cache:push= does the same from a workstation; the token and the signing key come from =CACHIX_AUTH_TOKEN= and =CACHIX_SIGNING_KEY= (or pass) and are never written to disk. The cache serves =nix run= of this repository; a consumer that builds =package.nix= with its own nixpkgs builds the binary itself.

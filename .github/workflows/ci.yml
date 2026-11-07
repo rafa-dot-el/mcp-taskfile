@@ -38,9 +38,11 @@ jobs:
         run: nix run --inputs-from . nixpkgs#devenv -- shell -- task check:release TAG="$GITHUB_REF_NAME"
       # Every push to main and every v* tag (the only push triggers above)
       # uploads to the PUBLIC cache; pull requests never do. A missing
-      # CACHIX_AUTH_TOKEN secret fails this step instead of skipping it.
+      # CACHIX_AUTH_TOKEN or CACHIX_SIGNING_KEY secret fails this step instead
+      # of skipping it.
       - name: task cache:push
         if: github.event_name == 'push'
         env:
           CACHIX_AUTH_TOKEN: ${{ secrets.CACHIX_AUTH_TOKEN }}
+          CACHIX_SIGNING_KEY: ${{ secrets.CACHIX_SIGNING_KEY }}
         run: nix run --inputs-from . nixpkgs#devenv -- shell -- task cache:push

@@ -13,6 +13,7 @@ vars:
   COVER_PROFILE: coverage.out
   CACHIX_CACHE: rafa-dot-el
   CACHIX_PASS_ENTRY: code/cachix/tokens-main-ci
+  CACHIX_SIGNING_PASS_ENTRY: code/cachix/rafa-dot-el-secret-key
   # Minimum total statement coverage (%). Ratchet upward; never lower.
   COVER_MIN: "78"
   # Pure functions (no I/O): each must reach COVER_PURE_MIN on its own.
@@ -149,13 +150,16 @@ tasks:
   cache:push:
     desc: >-
       Build the package with this flake and push its closure to the rafa-dot-el
-      Cachix cache (PUBLIC). Same command locally and in CI. Token:
-      CACHIX_AUTH_TOKEN (CI) or pass (local); never written to disk.
+      Cachix cache (PUBLIC). Same command locally and in CI. The cache is
+      client-signed: CACHIX_AUTH_TOKEN and CACHIX_SIGNING_KEY come from the
+      environment (CI) or pass (local); never written to disk.
     cmds:
       - |
         [ -n "${CACHIX_AUTH_TOKEN:-}" ] || CACHIX_AUTH_TOKEN="$(pass show {{.CACHIX_PASS_ENTRY}} | head -n1)"
         [ -n "$CACHIX_AUTH_TOKEN" ] || { echo "[-] no Cachix token: set CACHIX_AUTH_TOKEN or add pass entry {{.CACHIX_PASS_ENTRY}}"; exit 1; }
-        export CACHIX_AUTH_TOKEN
+        [ -n "${CACHIX_SIGNING_KEY:-}" ] || CACHIX_SIGNING_KEY="$(pass show {{.CACHIX_SIGNING_PASS_ENTRY}} | head -n1)"
+        [ -n "$CACHIX_SIGNING_KEY" ] || { echo "[-] no Cachix signing key: set CACHIX_SIGNING_KEY or add pass entry {{.CACHIX_SIGNING_PASS_ENTRY}}"; exit 1; }
+        export CACHIX_AUTH_TOKEN CACHIX_SIGNING_KEY
         out="$(nix build --no-link --print-out-paths .#default)"
         cachix push {{.CACHIX_CACHE}} "$out"
         echo "[+] pushed $out to {{.CACHIX_CACHE}}"
